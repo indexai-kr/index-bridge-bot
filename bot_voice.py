@@ -48,6 +48,21 @@ client = discord.Client(intents=intents)
 _play_lock = asyncio.Lock()      # 음성 재생 겹침 방지
 
 
+def voice_diag():
+    """시작 시 음성 transport 전제조건을 로그로 남긴다 (VOICE_DIAG)."""
+    import sys
+    print("VOICE_DIAG")
+    print(f"python_executable={sys.executable}")
+    print(f"discord_version={discord.__version__}")
+    for mod in ("nacl", "davey", "edge_tts"):
+        try:
+            __import__(mod)
+            print(f"{mod}=OK")
+        except Exception:
+            print(f"{mod}=FAIL")
+    print("voice_connect=PENDING (첫 음성채널 접속 시 OK/FAIL 기록)")
+
+
 def translate(text: str, target: str) -> str:
     """로컬 NLLB 우선(할당량 없음·오프라인), 실패 시에만 Gemini 폴백."""
     try:
@@ -86,7 +101,9 @@ async def speak_in_channel(voice_channel, text: str, lang: str):
                 vc = await voice_channel.connect()
         except Exception as e:
             print("[Bridge] 음성채널 연결 오류:", e)
+            print("voice_connect=FAIL")
             return
+        print("voice_connect=OK")
         mp3 = None
         try:
             mp3 = await tts_to_file(text, lang)
@@ -158,4 +175,5 @@ async def on_message(message: discord.Message):
 if __name__ == "__main__":
     if not TOKEN:
         raise SystemExit("환경변수 DISCORD_BOT_TOKEN 에 봇 토큰을 넣고 실행하세요.")
+    voice_diag()
     client.run(TOKEN)
