@@ -47,6 +47,13 @@ intents.voice_states = True
 client = discord.Client(intents=intents)
 _play_lock = asyncio.Lock()      # 음성 재생 겹침 방지
 
+# output stage + 세션 계측 상태 (STT 이후 출력 배선용)
+_VOICE_CHANNEL = None            # 현재 접속 음성채널 (TEXT_SEND 대상)
+_VOICE_SESSION = {"connect_count": 0, "disconnect_count": 0,
+                  "last_close_code": None, "reconnect_count": 0,
+                  "last_channel_id": None}
+_LAST_TTS_TEXT = {"text": None}  # 같은 문장 TTS 중복 생성 방지
+
 
 def voice_diag():
     """시작 시 음성 transport 전제조건을 로그로 남긴다 (VOICE_DIAG)."""
@@ -115,6 +122,10 @@ async def _ensure_voice(voice_channel):
         print(f"voice_recv_client={isinstance(vc, _VRC)}")
     except Exception:
         print("voice_recv_client=UNKNOWN(voice_recv import 실패)")
+    _VOICE_SESSION["connect_count"] += 1
+    _VOICE_SESSION["last_channel_id"] = getattr(voice_channel, "id", None)
+    global _VOICE_CHANNEL
+    _VOICE_CHANNEL = voice_channel
     _start_listen(vc)
     return vc
 
@@ -147,6 +158,62 @@ async def speak_in_channel(voice_channel, text: str, lang: str):
                     pass
 
 
+async def voice_output(uid, text):
+    """STT 출력 스테이지: 번역 → 음성방 채팅 → TTS → playback."""
+    loop = asyncio.get_running_loop()
+    translated = await loop.run_in_executor(None, translate, text, "en")
+    print(f"VOICE_TRANSLATE source_lang=ko target_lang=en "
+          f'source="{text}" translated="{translated}"')
+    if not translated.strip():
+        return
+    channel = _VOICE_CHANNEL
+    if channel is not None:
+        try:
+            await channel.send(f"[en] {translated}")
+            print(f"VOICE_TEXT_SEND channel_id={getattr(channel, 'id', '?')} "
+                  f"status=OK")
+        except Exception as e:
+            print(f"VOICE_TEXT_SEND status=FAIL({e})")
+    if translated.strip() == (_LAST_TTS_TEXT["text"] or ""):
+        print("VOICE_TTS status=SKIP(duplicate)")
+        return
+    try:
+        mp3 = await tts_to_file(translated, "en")
+        print(f"VOICE_TTS engine=edge-tts lang=en file={mp3} status=OK")
+    except Exception as e:
+        print(f"VOICE_TTS status=FAIL({e})")
+        return
+    _LAST_TTS_TEXT["text"] = translated.strip()
+    try:
+        vc = None
+        guild = getattr(channel, "guild", None)
+        if guild is not None:
+            vc = discord.utils.get(client.voice_clients, guild=guild)
+        if vc is None or not vc.is_connected():
+            print("VOICE_PLAY status=SKIP(not connected)")
+            return
+        async with _play_lock:
+            done = asyncio.Event()
+            running = asyncio.get_running_loop()
+
+            def _after(err):
+                if err:
+                    print("[Bridge] 재생 오류:", err)
+                running.call_soon_threadsafe(done.set)
+
+            vc.play(discord.FFmpegPCMAudio(mp3), after=_after)
+            print(f"VOICE_PLAY voice_client={type(vc).__module__}."
+                  f"{type(vc).__name__} playing={vc.is_playing()} status=OK")
+            await done.wait()
+    except Exception as e:
+        print(f"VOICE_PLAY status=FAIL({e})")
+    finally:
+        try:
+            os.remove(mp3)
+        except Exception:
+            pass
+
+
 def _start_listen(vc):
     """수신 시작 (1회만). voice_recv 없으면 조용히 스킵."""
     if getattr(vc, "_bridge_listening", False):
@@ -161,11 +228,12 @@ def _start_listen(vc):
         return
     import asyncio
     import traceback
-    from voice_in import RecvLogSink
+    from voice_in import ReceiveSink
     me = client.user.id if client.user else None
     print("[VOICE] listen BEFORE")
     try:
-        sink = RecvLogSink(asyncio.get_running_loop(), bot_user_id=me)
+        sink = ReceiveSink(asyncio.get_running_loop(), bot_user_id=me,
+                           on_utterance=voice_output)
         print(f"VOICE_SINK sink_type={type(sink).__module__}.{type(sink).__name__} sink_created=OK")
         vc.listen(sink)
     except Exception:
@@ -185,6 +253,22 @@ def _start_listen(vc):
 async def on_ready():
     print(f"[INDEX Bridge · Voice] 로그인됨: {client.user}")
     print(f"  음성={VOICE_LANG} / 텍스트={TEXT_LANG}   (채팅에 !flip 치면 뒤집힘, !leave 로 음성 나감)")
+
+
+@client.event
+async def on_voice_state_update(member, before, after):
+    """봇 자신의 음성 상태 변화만 세션 계측 (4006 관찰용)."""
+    if client.user is None or member.id != client.user.id:
+        return
+    if before.channel != after.channel:
+        if after.channel is None:
+            _VOICE_SESSION["disconnect_count"] += 1
+        else:
+            _VOICE_SESSION["reconnect_count"] += 1
+        print(f"VOICE_SESSION connect_count={_VOICE_SESSION['connect_count']} "
+              f"disconnect_count={_VOICE_SESSION['disconnect_count']} "
+              f"last_close_code={_VOICE_SESSION['last_close_code']} "
+              f"reconnect_count={_VOICE_SESSION['reconnect_count']}")
 
 
 @client.event
