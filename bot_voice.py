@@ -49,6 +49,14 @@ _play_lock = asyncio.Lock()      # 음성 재생 겹침 방지
 
 
 def translate(text: str, target: str) -> str:
+    """로컬 NLLB 우선(할당량 없음·오프라인), 실패 시에만 Gemini 폴백."""
+    try:
+        from nllb_local import translate_local
+        out = translate_local(text, target, source="auto")
+        if out:
+            return out
+    except Exception as e:
+        print("[Bridge] 로컬 번역 실패, Gemini 폴백:", e)
     try:
         lang = _LANG.get(target, target)
         r = _gem.generate_content(
