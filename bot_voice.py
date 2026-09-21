@@ -98,12 +98,17 @@ async def speak_in_channel(voice_channel, text: str, lang: str):
                 if vc.channel.id != voice_channel.id:
                     await vc.move_to(voice_channel)
             else:
-                vc = await voice_channel.connect()
+                try:
+                    from discord.ext.voice_recv import VoiceRecvClient
+                    vc = await voice_channel.connect(cls=VoiceRecvClient)
+                except Exception:
+                    vc = await voice_channel.connect()
         except Exception as e:
             print("[Bridge] 음성채널 연결 오류:", e)
             print("voice_connect=FAIL")
             return
         print("voice_connect=OK")
+        _start_listen(vc)
         mp3 = None
         try:
             mp3 = await tts_to_file(text, lang)
@@ -124,6 +129,26 @@ async def speak_in_channel(voice_channel, text: str, lang: str):
                     os.remove(mp3)
                 except Exception:
                     pass
+
+
+def _start_listen(vc):
+    """수신 시작 (1회만). voice_recv 없으면 조용히 스킵."""
+    if getattr(vc, "_bridge_listening", False):
+        return
+    try:
+        from discord.ext.voice_recv import VoiceRecvClient
+    except Exception as e:
+        print(f"[Bridge] voice_recv 없음, 수신 스킵: {e}")
+        return
+    if not isinstance(vc, VoiceRecvClient):
+        print("[Bridge] VoiceRecvClient 아님, 수신 스킵")
+        return
+    import asyncio
+    from voice_in import RecvLogSink
+    me = client.user.id if client.user else None
+    vc.listen(RecvLogSink(asyncio.get_running_loop(), bot_user_id=me))
+    vc._bridge_listening = True
+    print("[Bridge] 음성 수신 시작 (listen)")
 
 
 @client.event
