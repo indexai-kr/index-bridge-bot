@@ -6,3 +6,6 @@ edge-tts>=7.0
 # Gemini 번역 (API 키 필요, GEMINI_API_KEY 환경변수)
 google-generativeai>=0.8
 python-dotenv>=1.0
+# 음성 수신 (PR #58 DAVE 패치, commit SHA pin — branch 아님)
+discord-ext-voice-recv @ git+https://github.com/porgeeratad/discord-ext-voice-recv.git@03dd1e2dafe85522cc458441cd5b143b136ac836
+faster-whisper>=1.2.1
