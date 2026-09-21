@@ -100,13 +100,21 @@ async def _ensure_voice(voice_channel):
             try:
                 from discord.ext.voice_recv import VoiceRecvClient
                 vc = await voice_channel.connect(cls=VoiceRecvClient)
-            except Exception:
+            except Exception as e_cls:
+                print(f"[Bridge] VoiceRecvClient 접속 실패, 일반 접속 폴백: {e_cls}")
                 vc = await voice_channel.connect()
     except Exception as e:
         print("[Bridge] 음성채널 연결 오류:", e)
         print("voice_connect=FAIL")
         return None
     print("voice_connect=OK")
+    print("VOICE_RUNTIME")
+    print(f"vc_type={type(vc).__module__}.{type(vc).__name__}")
+    try:
+        from discord.ext.voice_recv import VoiceRecvClient as _VRC
+        print(f"voice_recv_client={isinstance(vc, _VRC)}")
+    except Exception:
+        print("voice_recv_client=UNKNOWN(voice_recv import 실패)")
     _start_listen(vc)
     return vc
 
@@ -152,9 +160,23 @@ def _start_listen(vc):
         print("[Bridge] VoiceRecvClient 아님, 수신 스킵")
         return
     import asyncio
+    import traceback
     from voice_in import RecvLogSink
     me = client.user.id if client.user else None
-    vc.listen(RecvLogSink(asyncio.get_running_loop(), bot_user_id=me))
+    print("[VOICE] listen BEFORE")
+    try:
+        sink = RecvLogSink(asyncio.get_running_loop(), bot_user_id=me)
+        print(f"VOICE_SINK sink_type={type(sink).__module__}.{type(sink).__name__} sink_created=OK")
+        vc.listen(sink)
+    except Exception:
+        print("[VOICE] listen FAIL")
+        traceback.print_exc()
+        return
+    print("[VOICE] listen AFTER")
+    try:
+        print(f"is_listening={vc.is_listening()} sink_set={vc.sink is not None}")
+    except Exception as e:
+        print(f"is_listening=UNKNOWN({e})")
     vc._bridge_listening = True
     print("[Bridge] 음성 수신 시작 (listen)")
 

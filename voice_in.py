@@ -43,13 +43,18 @@ class RecvLogSink:
             from discord.ext.voice_recv import AudioSink
             AudioSink.__init__(self)
         except Exception:
-            pass
+            import traceback
+            print("[Bridge] sink init 실패:")
+            traceback.print_exc()
         self.loop = loop
         self.bot_user_id = bot_user_id
         self._buf = {}
         self.rx_count = 0
 
     def write(self, user, data):
+        print(f"VOICE_RX_RAW user={getattr(user, 'id', None)} "
+              f"ssrc={getattr(getattr(data, 'packet', None), 'ssrc', None)} "
+              f"pcm={len(getattr(data, 'pcm', None) or b'')}", flush=True)
         uid = getattr(user, "id", None)
         if uid is not None and uid == self.bot_user_id:
             return  # 봇 자신의 TTS 재입력 차단
