@@ -17,6 +17,9 @@ import tempfile
 import discord
 import edge_tts
 import google.generativeai as genai
+from dotenv import load_dotenv
+
+load_dotenv()  # .env 파일이 있으면 환경변수로 읽음 (없으면 무시)
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY", "").strip())
 _gem = genai.GenerativeModel(
