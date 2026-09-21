@@ -89,26 +89,34 @@ async def tts_to_file(text: str, lang: str) -> str:
     return path
 
 
+async def _ensure_voice(voice_channel):
+    """음성채널 접속 보장. 성공 시 vc, 실패 시 None (+ 로그)."""
+    vc = discord.utils.get(client.voice_clients, guild=voice_channel.guild)
+    try:
+        if vc and vc.is_connected():
+            if vc.channel.id != voice_channel.id:
+                await vc.move_to(voice_channel)
+        else:
+            try:
+                from discord.ext.voice_recv import VoiceRecvClient
+                vc = await voice_channel.connect(cls=VoiceRecvClient)
+            except Exception:
+                vc = await voice_channel.connect()
+    except Exception as e:
+        print("[Bridge] 음성채널 연결 오류:", e)
+        print("voice_connect=FAIL")
+        return None
+    print("voice_connect=OK")
+    _start_listen(vc)
+    return vc
+
+
 async def speak_in_channel(voice_channel, text: str, lang: str):
     """글쓴 사람이 있는 음성채널에 봇이 들어가 TTS 재생."""
     async with _play_lock:
-        vc = discord.utils.get(client.voice_clients, guild=voice_channel.guild)
-        try:
-            if vc and vc.is_connected():
-                if vc.channel.id != voice_channel.id:
-                    await vc.move_to(voice_channel)
-            else:
-                try:
-                    from discord.ext.voice_recv import VoiceRecvClient
-                    vc = await voice_channel.connect(cls=VoiceRecvClient)
-                except Exception:
-                    vc = await voice_channel.connect()
-        except Exception as e:
-            print("[Bridge] 음성채널 연결 오류:", e)
-            print("voice_connect=FAIL")
+        vc = await _ensure_voice(voice_channel)
+        if vc is None:
             return
-        print("voice_connect=OK")
-        _start_listen(vc)
         mp3 = None
         try:
             mp3 = await tts_to_file(text, lang)
@@ -175,6 +183,22 @@ async def on_message(message: discord.Message):
         vc = discord.utils.get(client.voice_clients, guild=message.guild)
         if vc:
             await vc.disconnect()
+        return
+    if low == "!join":
+        author_voice = getattr(message.author, "voice", None)
+        if not (author_voice and author_voice.channel):
+            await message.channel.send("음성채널에 먼저 들어가주세요.")
+            return
+        ch = author_voice.channel
+        vc = await _ensure_voice(ch)
+        if vc is None:
+            await message.channel.send("voice_connect=FAIL")
+            return
+        print("VOICE_CONNECT")
+        print(f"channel_id={ch.id}")
+        print(f"channel_name={ch.name}")
+        print("voice_connect=OK")
+        print(f"recv_listening={'OK' if getattr(vc, '_bridge_listening', False) else 'SKIP'}")
         return
     if low.startswith("!"):
         return  # 그 외 명령은 무시
