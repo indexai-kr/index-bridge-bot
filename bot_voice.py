@@ -19,6 +19,9 @@ import edge_tts
 import google.generativeai as genai
 from dotenv import load_dotenv
 
+import botlists
+import outreach
+
 load_dotenv()  # .env 파일이 있으면 환경변수로 읽음 (없으면 무시)
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY", "").strip())
@@ -53,6 +56,112 @@ _VOICE_SESSION = {"connect_count": 0, "disconnect_count": 0,
                   "last_close_code": None, "reconnect_count": 0,
                   "last_channel_id": None}
 _LAST_TTS_TEXT = {"text": None}  # 같은 문장 TTS 중복 생성 방지
+
+# 사용 집계 + 마스터 통지 (MSG-P1/P2)
+_USAGE = outreach.Usage()
+_OWNER_ID = os.environ.get("BRIDGE_OWNER_ID", "").strip()
+_DAILY_TASK_STARTED = {"v": False}
+
+
+async def notify_owner(text: str) -> bool:
+    """마스터에게 개인 메시지. 보낼 곳을 모르면 **조용히 넘어가지 않고** 말한다.
+
+    통지가 안 가는 것과 아무 일도 없는 것은 다른 상태다. 구분 못 하면
+    "아무도 안 쓰네"와 "통지가 고장났네"를 영영 못 가른다.
+    """
+    uid = _OWNER_ID
+    if not uid:
+        try:                                   # 앱 소유자로 대체 시도
+            app = await client.application_info()
+            uid = str(app.owner.id)
+        except Exception as e:
+            print(f"NOTIFY status=OFF reason=owner_unknown({e}) "
+                  f"hint=BRIDGE_OWNER_ID 환경변수에 디스코드 사용자 ID를 넣으세요")
+            return False
+    try:
+        user = client.get_user(int(uid)) or await client.fetch_user(int(uid))
+        await user.send(text)
+        print(f"NOTIFY status=OK to={uid}")
+        return True
+    except Exception as e:
+        print(f"NOTIFY status=FAIL to={uid} reason={e}")
+        return False
+
+
+async def count_translation(kind: str, guild=None):
+    """번역 한 건을 세고, 통틀어 첫 건이면 마스터에게 알린다 (MSG-P2)."""
+    try:
+        first = _USAGE.record_translation()
+    except Exception as e:
+        print(f"COUNT status=FAIL reason={e}")
+        return
+    print(f"COUNT kind={kind} today={_USAGE.count_for()}")
+    if first:
+        where = getattr(guild, "name", None)
+        await notify_owner(
+            "🎊 **첫 번역이 나왔습니다**\n"
+            f"경로: {kind}" + (f"\n서버: {where}" if where else ""))
+
+
+async def push_botlist_stats():
+    """봇 목록 사이트에 현재 서버 수를 올린다 (MSG-P3). 꺼져 있으면 그냥 넘어간다."""
+    if not botlists.enabled_providers():
+        return
+    bot_id = getattr(client.user, "id", None)
+    if bot_id is None:
+        print("BOTLIST post=SKIP reason=아직 로그인 전")
+        return
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as sess:
+            await botlists.post_stats(sess, bot_id, len(client.guilds))
+    except Exception as e:
+        print(f"BOTLIST post=FAIL reason={e}")
+
+
+async def _botlist_loop():
+    """30분마다 서버 수를 올린다. 사이트 쪽 통계가 멈춰 보이면 여기부터 본다."""
+    await client.wait_until_ready()
+    while not client.is_closed():
+        await push_botlist_stats()
+        try:
+            await asyncio.sleep(1800)
+        except asyncio.CancelledError:
+            raise
+
+
+async def _daily_report_loop():
+    """KST 자정이 지나면 전날 집계를 한 번 보낸다."""
+    await client.wait_until_ready()
+    last_sent = outreach.today_kst()
+    while not client.is_closed():
+        try:
+            await asyncio.sleep(300)           # 5분마다 날짜만 확인
+            today = outreach.today_kst()
+            if today != last_sent:
+                await notify_owner(outreach.daily_report_text(
+                    last_sent, _USAGE.count_for(last_sent), len(client.guilds)))
+                last_sent = today
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            print(f"DAILY status=FAIL reason={e}")
+
+
+def _first_sendable_channel(guild):
+    """인사를 보낼 수 있는 첫 채널. 없으면 None (지어내지 않는다)."""
+    me = guild.me
+    candidates = []
+    if guild.system_channel:
+        candidates.append(guild.system_channel)
+    candidates.extend(guild.text_channels)
+    for ch in candidates:
+        try:
+            if ch.permissions_for(me).send_messages:
+                return ch
+        except Exception:
+            continue
+    return None
 
 
 def voice_diag():
@@ -167,6 +276,8 @@ async def voice_output(uid, text):
     if not translated.strip():
         return
     channel = _VOICE_CHANNEL
+    outreach.append_turn(text, translated, "ko", "en", "음성")
+    await count_translation("음성", getattr(channel, "guild", None))
     if channel is not None:
         try:
             await channel.send(f"[en] {translated}")
@@ -253,6 +364,45 @@ def _start_listen(vc):
 async def on_ready():
     print(f"[INDEX Bridge · Voice] 로그인됨: {client.user}")
     print(f"  음성={VOICE_LANG} / 텍스트={TEXT_LANG}   (채팅에 !flip 치면 뒤집힘, !leave 로 음성 나감)")
+    print(f"  서버 {len(client.guilds)}곳 · 오늘 번역 {_USAGE.count_for()}건")
+    try:
+        print(f"  초대링크: {outreach.invite_url(getattr(client.user, 'id', None))}")
+    except ValueError as e:
+        print(f"  초대링크 생성 실패: {e}")
+    print(f"  {botlists.describe_status()}")
+    if not _DAILY_TASK_STARTED["v"]:        # on_ready 는 재접속마다 다시 불린다
+        _DAILY_TASK_STARTED["v"] = True
+        client.loop.create_task(_daily_report_loop())
+        client.loop.create_task(_botlist_loop())
+
+
+@client.event
+async def on_guild_join(guild):
+    """새 서버에 초대됨 — 인사 한 번 + 마스터 통지 (MSG-P1/P2)."""
+    print(f"GUILD_JOIN id={guild.id} name={guild.name} "
+          f"members={getattr(guild, 'member_count', '?')}")
+    ch = _first_sendable_channel(guild)
+    if ch is None:
+        print("GUILD_JOIN intro=SKIP(보낼 수 있는 채널 없음)")
+    else:
+        try:
+            await ch.send(outreach.intro_text())
+            print(f"GUILD_JOIN intro=OK channel={ch.name}")
+        except Exception as e:
+            print(f"GUILD_JOIN intro=FAIL({e})")
+    await notify_owner(
+        f"🎉 새 서버에 초대됐습니다\n"
+        f"**{guild.name}** · 멤버 {getattr(guild, 'member_count', '?')}명\n"
+        f"이제 서버 {len(client.guilds)}곳입니다.")
+    await push_botlist_stats()      # 서버 수가 바뀌었으니 목록 사이트도 갱신
+
+
+@client.event
+async def on_guild_remove(guild):
+    """서버에서 빠짐 — 서버 수가 줄었으니 목록도 줄여야 맞다."""
+    print(f"GUILD_REMOVE id={guild.id} name={guild.name} "
+          f"remaining={len(client.guilds)}")
+    await push_botlist_stats()
 
 
 @client.event
@@ -281,6 +431,22 @@ async def on_message(message: discord.Message):
         return
 
     low = content.lower()
+    if low in ("!help", "!도움", "!도움말"):
+        await message.channel.send(outreach.help_text())
+        return
+    if low in ("!invite", "!초대"):
+        try:
+            # getattr 로 받는다 — 로그인 전이면 user 가 None 이고,
+            # client.user.id 는 ValueError 가 아니라 AttributeError 를 내서
+            # 아래 그물을 그냥 빠져나간다(사용자는 아무 답도 못 받는다).
+            await message.channel.send(
+                f"이 링크로 다른 서버에 데려갈 수 있습니다:\n"
+                f"{outreach.invite_url(getattr(client.user, 'id', None))}")
+        except ValueError as e:
+            print(f"INVITE status=FAIL({e})")
+            await message.channel.send(
+                "초대링크를 지금 만들지 못했습니다. 잠시 후 다시 시도해주세요.")
+        return
     if low == "!flip":
         VOICE_LANG, TEXT_LANG = TEXT_LANG, VOICE_LANG
         await message.channel.send(f"🔁 이제  음성={VOICE_LANG} / 텍스트={TEXT_LANG}")
@@ -305,6 +471,16 @@ async def on_message(message: discord.Message):
         print(f"channel_name={ch.name}")
         print("voice_connect=OK")
         print(f"recv_listening={'OK' if getattr(vc, '_bridge_listening', False) else 'SKIP'}")
+        # 처음 불러본 사람에게만 쓰는 법을 개인 메시지로 한 번 (MSG-P1).
+        # DM이 닫혀 있으면 실패하는데, 그건 사용자 설정이지 고장이 아니다.
+        if _USAGE.needs_onboarding(message.author.id):
+            try:
+                await message.author.send(outreach.onboarding_text())
+                print(f"ONBOARD status=OK user={message.author.id}")
+            except Exception as e:
+                print(f"ONBOARD status=FAIL user={message.author.id} reason={e}")
+            finally:
+                _USAGE.mark_onboarded(message.author.id)
         return
     if low.startswith("!"):
         return  # 그 외 명령은 무시
@@ -318,6 +494,8 @@ async def on_message(message: discord.Message):
     text_out = await loop.run_in_executor(None, translate, content, TEXT_LANG)
     if text_out.strip() and text_out.strip().lower() != content.lower():
         await message.reply(f"[{TEXT_LANG}] {text_out}", mention_author=False)
+        outreach.append_turn(content, text_out, "auto", TEXT_LANG, "텍스트")
+        await count_translation("텍스트", message.guild)
 
     # 2) 음성 채널 → VOICE_LANG (글쓴 사람이 음성채널에 있을 때만)
     author_voice = getattr(message.author, "voice", None)

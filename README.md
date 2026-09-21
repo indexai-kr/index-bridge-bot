@@ -55,6 +55,49 @@ Voice + text bidirectional MVP.
 - faster-whisper (small model, CPU)
 - PyTorch (CPU)
 - discord-ext-voice-recv@03dd1e2dafe85522cc458441cd5b143b136ac836 (PR #58 DAVE patch)
+
+## Growth / ops tooling
+
+Optional, all off by default. Nothing here runs unless you configure it.
+
+| File | What it does | Needs |
+|---|---|---|
+| `outreach.py` | Help/invite text, onboarding DM, usage counting | — |
+| `botlists.py` | Posts server count to bot directories | `TOPGG_TOKEN` / `BOTSGG_TOKEN` |
+| `democlip.py` | Renders saved translations into a subtitled clip | ffmpeg, edge-tts |
+| `demo_seed.py` | Seeds a transcript using the real translator | NLLB model |
+| `site_build.py` | Builds the invite page + sitemap/robots | Application ID |
+
+### Environment
+
+| Variable | Effect if unset |
+|---|---|
+| `BRIDGE_OWNER_ID` | Owner notifications off (falls back to app owner) |
+| `TOPGG_TOKEN`, `BOTSGG_TOKEN` | That directory is skipped |
+| `BRIDGE_STATE_FILE` | Usage counts go to the temp directory |
+| `BRIDGE_TRANSCRIPT_FILE` | Transcript goes to the temp directory |
+
+State and transcripts default to the temp directory on purpose — this
+repository is public, and translated message bodies must not follow a
+`git add .` into it.
+
+### Building the invite page
+
+```bash
+python site_build.py --application-id <your app id> \
+                     --base-url https://<user>.github.io/index-bridge-bot/
 ```
 
-Write-Content -Path "C:\Projects\index-bridge-bot\README.md" -Value (Get-Content -Path "C:\Projects\index-bridge-bot\README.md" -Raw)
+The Application ID is required; there is no default, because a wrong one
+produces a page whose button invites somebody else's bot.
+
+Sitemap submission is *not* automated: Google retired the ping endpoint in
+2023 and it now returns 404. The live automatic path is the `Sitemap:` line
+in `robots.txt`, which the builder writes. Search Console registration is a
+one-time manual step.
+
+### Tests
+
+```bash
+python -m pytest tests -q
+```
