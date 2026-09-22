@@ -5,6 +5,10 @@ Discord voice + text bidirectional translation bot.
 Korean speech in voice channel → ST → translated English voice & text.
 English text in text channel → translated Korean text.
 
+**[디스코드에 추가하기](https://indexai-kr.github.io/index-bridge-bot/)** — 설치도 가입도 없이 초대만 하면 씁니다.
+
+**[데모 영상 보기](demo.mp4)** (23초, 1080×1920) — 실제 번역기로 만든 6턴 시연 (`demo_seed.py` + `democlip.py`, 대본 손글 없음).
+
 **Stack:** Python 3.10+ · discord.py 2.7 · faster-whisper (small/CPU) · NLLB (local) · edge-tts · Gemini (fallback).
 
 ## Quick start
