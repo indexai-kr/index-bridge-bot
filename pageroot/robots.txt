@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://indexai-kr.github.io/index-bridge-bot/sitemap.xml

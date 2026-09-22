@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INDEX Bridge — 한국어 ↔ 영어를 이어주는 디스코드 봇</title>
+<meta name="description" content="한국어 ↔ 영어를 이어주는 디스코드 봇. 설치도 가입도 없이 초대만 하면 채팅과 음성방에서 한국어와 영어를 옮겨줍니다.">
+<link rel="canonical" href="https://indexai-kr.github.io/index-bridge-bot/">
+<meta property="og:title" content="INDEX Bridge — 한국어 ↔ 영어를 이어주는 디스코드 봇">
+<meta property="og:description" content="설치도 가입도 없습니다. 초대하면 바로 씁니다.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://indexai-kr.github.io/index-bridge-bot/">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "INDEX Bridge",
+  "description": "한국어 ↔ 영어를 이어주는 디스코드 봇. 디스코드 채팅과 음성 채널에서 한국어와 영어를 서로 옮겨줍니다. 설치나 가입 없이 초대만 하면 씁니다.",
+  "applicationCategory": "CommunicationApplication",
+  "operatingSystem": "Discord",
+  "url": "https://indexai-kr.github.io/index-bridge-bot/",
+  "installUrl": "https://discord.com/oauth2/authorize?client_id=1548250229353226271&permissions=3214336&scope=bot",
+  "inLanguage": [
+    "ko",
+    "en"
+  ],
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "KRW"
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "설치할 게 있나요?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "없습니다. 초대 링크를 누르고 서버를 고르면 바로 씁니다. 가입도, 내려받을 것도 없습니다."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "무료인가요?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "네, 무료로 쓸 수 있습니다."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "음성도 번역되나요?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "됩니다. 음성 채널에서 !join 이라고 치면 들어가서, 말한 내용을 옮겨서 읽어줍니다. 옮긴 글은 채팅에도 남습니다."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "어떤 언어를 지원하나요?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "한국어와 영어 사이를 옮깁니다. !flip 으로 방향을 뒤집을 수 있습니다."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "번역한 내용이 저장되나요?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "서버 관리자가 따로 켜지 않는 한, 옮긴 글은 채팅에 남는 것 말고는 바깥으로 나가지 않습니다."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "어떻게 부르나요?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "채팅에 !help 를 치면 쓰는 법이 나옵니다."
+      }
+    }
+  ]
+}
+</script>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 20px 64px;
+    background: #101418; color: #e9edf2;
+    font-family: "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+    line-height: 1.7;
+  }
+  main { max-width: 680px; margin: 0 auto; }
+  h1 { font-size: 2.2rem; margin: 64px 0 8px; letter-spacing: -.02em; }
+  .tagline { font-size: 1.15rem; color: #9fb0c0; margin: 0 0 8px; }
+  .sub { color: #7d8b99; margin: 0 0 32px; }
+  .cta {
+    display: inline-block; padding: 16px 32px; border-radius: 10px;
+    background: #5865f2; color: #fff; font-weight: 700; font-size: 1.05rem;
+    text-decoration: none;
+  }
+  .cta:hover { background: #4752c4; }
+  .note { font-size: .9rem; color: #7d8b99; margin-top: 12px; }
+  h2 { font-size: 1.25rem; margin: 56px 0 16px; }
+  ol { padding-left: 0; list-style: none; counter-reset: s; }
+  ol li {
+    counter-increment: s; position: relative;
+    padding: 0 0 18px 44px;
+  }
+  ol li::before {
+    content: counter(s); position: absolute; left: 0; top: 2px;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #1d2733; color: #9fb0c0;
+    display: grid; place-items: center; font-size: .85rem; font-weight: 700;
+  }
+  ol li strong { display: block; }
+  ol li span { color: #9fb0c0; }
+  details {
+    border-top: 1px solid #1d2733; padding: 14px 0;
+  }
+  details summary { cursor: pointer; font-weight: 600; }
+  details p { color: #9fb0c0; margin: 10px 0 0; }
+  code {
+    background: #1d2733; padding: 2px 7px; border-radius: 5px;
+    font-size: .9em;
+  }
+  footer {
+    margin-top: 64px; padding-top: 24px; border-top: 1px solid #1d2733;
+    color: #61707e; font-size: .88rem;
+  }
+</style>
+</head>
+<body>
+  <main>
+    <h1>INDEX Bridge</h1>
+    <p class="tagline">한국어 ↔ 영어를 이어주는 디스코드 봇</p>
+    <p class="sub">설치할 것도, 가입할 것도 없습니다. 초대하면 바로 씁니다.</p>
+
+    <a class="cta" href="https://discord.com/oauth2/authorize?client_id=1548250229353226271&amp;permissions=3214336&amp;scope=bot" rel="noopener">디스코드에 추가하기</a>
+    <p class="note">서버에 봇을 추가할 권한이 있어야 합니다.</p>
+
+    <h2>쓰는 법</h2>
+    <ol>
+      <li><strong>초대하기</strong><span>아래 버튼을 눌러 서버를 고릅니다.</span></li>
+      <li><strong>그냥 쓰기</strong><span>채팅에 한국어를 쓰면 영어로 답합니다. 반대도 됩니다.</span></li>
+      <li><strong>음성방에서</strong><span><code>!join</code> 으로 부르면 말한 것을 옮겨 읽어줍니다.</span></li>
+    </ol>
+
+    <h2>자주 묻는 것</h2>
+      <details>
+        <summary>설치할 게 있나요?</summary>
+        <p>없습니다. 초대 링크를 누르고 서버를 고르면 바로 씁니다. 가입도, 내려받을 것도 없습니다.</p>
+      </details>
+      <details>
+        <summary>무료인가요?</summary>
+        <p>네, 무료로 쓸 수 있습니다.</p>
+      </details>
+      <details>
+        <summary>음성도 번역되나요?</summary>
+        <p>됩니다. 음성 채널에서 <code>!join</code> 이라고 치면 들어가서, 말한 내용을 옮겨서 읽어줍니다. 옮긴 글은 채팅에도 남습니다.</p>
+      </details>
+      <details>
+        <summary>어떤 언어를 지원하나요?</summary>
+        <p>한국어와 영어 사이를 옮깁니다. <code>!flip</code> 으로 방향을 뒤집을 수 있습니다.</p>
+      </details>
+      <details>
+        <summary>번역한 내용이 저장되나요?</summary>
+        <p>서버 관리자가 따로 켜지 않는 한, 옮긴 글은 채팅에 남는 것 말고는 바깥으로 나가지 않습니다.</p>
+      </details>
+      <details>
+        <summary>어떻게 부르나요?</summary>
+        <p>채팅에 <code>!help</code> 를 치면 쓰는 법이 나옵니다.</p>
+      </details>
+
+    <footer>
+      <p>채팅에 <code>!help</code> 를 치면 쓰는 법이 나옵니다.</p>
+    </footer>
+  </main>
+</body>
+</html>
